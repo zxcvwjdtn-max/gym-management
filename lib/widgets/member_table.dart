@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/locale_provider.dart';
 import '../screens/members/member_detail_screen.dart';
+import '../screens/members/member_membership_tab.dart';
 
 // 컬럼 flex 비율 (순번, 체크, 이름, 이용권명, 이용날짜, 잔여, 옷, 락카, 이용권등록, 회원번호, 담당자, 가입일, 마지막출석)
 const _colFlex = [1, 1, 2, 3, 4, 2, 1, 1, 2, 2, 2, 2, 2];

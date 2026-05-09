@@ -10,7 +10,7 @@ class WebSocketService {
   // 웹 Docker 배포 시 --dart-define=WS_BASE_URL=ws://서버IP/api/ws/attendance 로 주입
   static const String wsUrl = String.fromEnvironment(
     'WS_BASE_URL',
-    defaultValue: 'ws://localhost:8080/api/ws/attendance',
+    defaultValue: 'ws://localhost:8081/api/ws/attendance',
   );
 
   /// WebSocket 서버에 연결하고 출석 메시지 수신

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../services/api_service.dart';
@@ -31,19 +32,20 @@ class _StaffScreenState extends State<StaffScreen> {
     }
   }
 
-  static const _roleToId = {'OWNER': 1, 'DIRECTOR': 2, 'STAFF': 3, 'PARTTIME': 4};
+  static const _roleToId   = {'OWNER': 1, 'DIRECTOR': 2, 'STAFF': 3, 'PARTTIME': 4};
   static const _levelToRole = {1: 'OWNER', 2: 'DIRECTOR', 3: 'STAFF', 4: 'PARTTIME'};
 
+  // ── 직원 등록/수정 폼 ────────────────────────────────────────
   void _showForm([Map<String, dynamic>? staff]) {
-    final loc = context.read<LocaleProvider>();
-    final nameCtrl     = TextEditingController(text: staff?['adminName'] ?? '');
-    final loginCtrl    = TextEditingController(text: staff?['loginId']   ?? '');
-    final pwdCtrl      = TextEditingController();
-    final phoneCtrl    = TextEditingController(text: staff?['phone']     ?? '');
-    final specialtyCtrl= TextEditingController(text: staff?['specialty'] ?? '');
-    final authLevel    = staff?['authLevel'] as int? ?? 3;
-    String role        = _levelToRole[authLevel] ?? 'STAFF';
-    bool isTrainer     = staff?['isTrainer'] == 'Y';
+    final loc           = context.read<LocaleProvider>();
+    final nameCtrl      = TextEditingController(text: staff?['adminName'] ?? '');
+    final loginCtrl     = TextEditingController(text: staff?['loginId']   ?? '');
+    final pwdCtrl       = TextEditingController();
+    final phoneCtrl     = TextEditingController(text: staff?['phone']     ?? '');
+    final specialtyCtrl = TextEditingController(text: staff?['specialty'] ?? '');
+    final authLevel     = staff?['authLevel'] as int? ?? 3;
+    String role         = _levelToRole[authLevel] ?? 'STAFF';
+    bool isTrainer      = staff?['isTrainer'] == 'Y';
 
     showDialog(
       context: context,
@@ -52,7 +54,25 @@ class _StaffScreenState extends State<StaffScreen> {
           title: Row(children: [
             const Icon(Icons.manage_accounts, color: Color(0xFF1565C0), size: 20),
             const SizedBox(width: 8),
-            Text(staff == null ? loc.t('center.staff.addTitle') : loc.t('center.staff.editTitle')),
+            Text(staff == null
+                ? loc.t('center.staff.addTitle')
+                : loc.t('center.staff.editTitle')),
+            if (staff?['staffNo'] != null) ...[
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Text('직원번호 ${staff!['staffNo']}',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.blue.shade700,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ],
           ]),
           content: SizedBox(
             width: 460,
@@ -86,7 +106,9 @@ class _StaffScreenState extends State<StaffScreen> {
                   controller: pwdCtrl,
                   obscureText: true,
                   decoration: InputDecoration(
-                    labelText: staff == null ? loc.t('center.staff.pwdLabel') : loc.t('center.staff.pwdEditLabel'),
+                    labelText: staff == null
+                        ? loc.t('center.staff.pwdLabel')
+                        : loc.t('center.staff.pwdEditLabel'),
                     border: const OutlineInputBorder(),
                   ),
                 )),
@@ -97,9 +119,9 @@ class _StaffScreenState extends State<StaffScreen> {
                 currentLabel: loc.t('center.staff.role.$role'),
                 hint: loc.t('center.staff.select'),
                 options: [
-                  (loc.t('center.staff.role.OWNER'), 'OWNER'),
+                  (loc.t('center.staff.role.OWNER'),    'OWNER'),
                   (loc.t('center.staff.role.DIRECTOR'), 'DIRECTOR'),
-                  (loc.t('center.staff.role.STAFF'), 'STAFF'),
+                  (loc.t('center.staff.role.STAFF'),    'STAFF'),
                   (loc.t('center.staff.role.PARTTIME'), 'PARTTIME'),
                 ],
                 onSelected: (v) { if (v != null) setDlg(() => role = v); },
@@ -150,21 +172,25 @@ class _StaffScreenState extends State<StaffScreen> {
                 try {
                   final body = <String, dynamic>{
                     'adminName': nameCtrl.text.trim(),
-                    'loginId': loginCtrl.text.trim(),
+                    'loginId':   loginCtrl.text.trim(),
                     'authGroupId': _roleToId[role],
-                    'phone': phoneCtrl.text.trim(),
+                    'phone':     phoneCtrl.text.trim(),
                     'isTrainer': isTrainer ? 'Y' : 'N',
                     'specialty': specialtyCtrl.text.trim(),
                     if (pwdCtrl.text.isNotEmpty) 'loginPw': pwdCtrl.text,
                   };
                   final api = context.read<ApiService>();
-                  if (staff == null) await api.createStaff(body);
-                  else await api.updateStaff(staff['adminId'], body);
+                  if (staff == null) {
+                    await api.createStaff(body);
+                  } else {
+                    await api.updateStaff(staff['adminId'], body);
+                  }
                   if (ctx.mounted) { Navigator.pop(ctx); _load(); }
                 } catch (e) {
                   if (ctx.mounted) {
                     showErrorSnack(ctx,
-                      loc.t('center.staff.saveFail', params: {'e': e.toString()}));
+                        loc.t('center.staff.saveFail',
+                            params: {'e': e.toString()}));
                   }
                 }
               },
@@ -179,6 +205,15 @@ class _StaffScreenState extends State<StaffScreen> {
     );
   }
 
+  // ── 출근이력 다이얼로그 ──────────────────────────────────────
+  void _showAttendance(Map<String, dynamic> staff) {
+    showDialog(
+      context: context,
+      builder: (_) => _StaffAttendanceDialog(staff: staff),
+    );
+  }
+
+  // ── 비활성화 ────────────────────────────────────────────────
   Future<void> _deleteStaff(Map<String, dynamic> s) async {
     final loc = context.read<LocaleProvider>();
     final ok = await showDialog<bool>(
@@ -186,7 +221,7 @@ class _StaffScreenState extends State<StaffScreen> {
       builder: (_) => AlertDialog(
         title: Text(loc.t('center.staff.deactivate')),
         content: Text(loc.t('center.staff.deactivateConfirm',
-          params: {'n': s['adminName']?.toString() ?? ''})),
+            params: {'n': s['adminName']?.toString() ?? ''})),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false),
               child: Text(loc.t('common.cancel'))),
@@ -204,11 +239,14 @@ class _StaffScreenState extends State<StaffScreen> {
       await context.read<ApiService>().deleteStaff(s['adminId']);
       _load();
     } catch (e) {
-      if (mounted) showErrorSnack(context,
-        loc.t('center.staff.fail', params: {'e': e.toString()}));
+      if (mounted) {
+        showErrorSnack(context,
+            loc.t('center.staff.fail', params: {'e': e.toString()}));
+      }
     }
   }
 
+  // ── 빌드 ────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final loc = context.watch<LocaleProvider>();
@@ -248,6 +286,8 @@ class _StaffScreenState extends State<StaffScreen> {
                   child: DataTable(
                     headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
                     columns: [
+                      DataColumn(label: Text('직원번호',
+                          style: const TextStyle(fontWeight: FontWeight.bold))),
                       DataColumn(label: Text(loc.t('center.staff.col.name'),
                           style: const TextStyle(fontWeight: FontWeight.bold))),
                       DataColumn(label: Text(loc.t('center.staff.col.phone'),
@@ -266,8 +306,39 @@ class _StaffScreenState extends State<StaffScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold))),
                     ],
                     rows: _staff.map((s) => DataRow(cells: [
-                      DataCell(Text(s['adminName'] ?? '-',
-                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                      // 직원번호
+                      DataCell(s['staffNo'] != null
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Text(s['staffNo'].toString(),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade700,
+                                      fontSize: 13)),
+                            )
+                          : Text('-', style: TextStyle(color: Colors.grey.shade400))),
+                      // 이름 — 클릭하면 출근이력
+                      DataCell(
+                        InkWell(
+                          onTap: () => _showAttendance(s),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(s['adminName'] ?? '-',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.schedule,
+                                size: 14, color: Colors.grey.shade400),
+                          ]),
+                        ),
+                      ),
                       DataCell(Text(s['phone'] ?? '-',
                           style: TextStyle(color: Colors.grey.shade700))),
                       DataCell(Text(s['loginId'] ?? '-')),
@@ -285,12 +356,15 @@ class _StaffScreenState extends State<StaffScreen> {
                               : Colors.grey.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(s['useYn'] == 'Y'
-                            ? loc.t('center.staff.active')
-                            : loc.t('center.staff.inactive'),
+                        child: Text(
+                          s['useYn'] == 'Y'
+                              ? loc.t('center.staff.active')
+                              : loc.t('center.staff.inactive'),
                           style: TextStyle(
-                            color: s['useYn'] == 'Y' ? Colors.green : Colors.grey,
-                            fontSize: 12, fontWeight: FontWeight.bold)),
+                              color: s['useYn'] == 'Y' ? Colors.green : Colors.grey,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold),
+                        ),
                       )),
                       DataCell(Text(
                           s['createdAt']?.toString().substring(0, 10) ?? '-')),
@@ -320,11 +394,11 @@ class _StaffScreenState extends State<StaffScreen> {
 
   Widget _roleBadge(LocaleProvider loc, String? role) {
     final color = switch (role) {
-      'OWNER' => Colors.purple,
+      'OWNER'    => Colors.purple,
       'DIRECTOR' => Colors.blue,
-      'STAFF' => Colors.teal,
+      'STAFF'    => Colors.teal,
       'PARTTIME' => Colors.orange,
-      _ => Colors.grey,
+      _          => Colors.grey,
     };
     final label = role == null ? '-' : loc.t('center.staff.role.$role');
     return Container(
@@ -354,5 +428,153 @@ class _StaffScreenState extends State<StaffScreen> {
             style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
       ],
     ]);
+  }
+}
+
+// ── 출근이력 다이얼로그 ────────────────────────────────────────
+class _StaffAttendanceDialog extends StatefulWidget {
+  final Map<String, dynamic> staff;
+  const _StaffAttendanceDialog({required this.staff});
+
+  @override
+  State<_StaffAttendanceDialog> createState() => _StaffAttendanceDialogState();
+}
+
+class _StaffAttendanceDialogState extends State<_StaffAttendanceDialog> {
+  List<Map<String, dynamic>> _records = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await context.read<ApiService>()
+          .getStaffAttendance(widget.staff['adminId'] as int);
+      if (mounted) setState(() { _records = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  String _fmt(String? raw, {bool dateOnly = false}) {
+    if (raw == null) return '-';
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      return dateOnly
+          ? DateFormat('yyyy.MM.dd (E)', 'ko').format(dt)
+          : DateFormat('HH:mm').format(dt);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  String _duration(String? inRaw, String? outRaw) {
+    if (inRaw == null || outRaw == null) return '-';
+    try {
+      final inDt  = DateTime.parse(inRaw).toLocal();
+      final outDt = DateTime.parse(outRaw).toLocal();
+      final diff  = outDt.difference(inDt);
+      final h = diff.inHours;
+      final m = diff.inMinutes.remainder(60);
+      return h > 0 ? '$h시간 $m분' : '$m분';
+    } catch (_) {
+      return '-';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name   = widget.staff['adminName'] ?? '';
+    final staffNo = widget.staff['staffNo']?.toString() ?? '-';
+
+    return AlertDialog(
+      title: Row(children: [
+        const Icon(Icons.schedule, color: Color(0xFF1565C0), size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$name 출근이력',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('직원번호 $staffNo · 최근 3개월',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500,
+                    fontWeight: FontWeight.normal)),
+          ]),
+        ),
+      ]),
+      content: SizedBox(
+        width: 540,
+        height: 420,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(child: Text(_error!,
+                    style: const TextStyle(color: Colors.red)))
+                : _records.isEmpty
+                    ? const Center(child: Text('출근 기록이 없습니다.',
+                        style: TextStyle(color: Colors.grey)))
+                    : SingleChildScrollView(
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(
+                              Colors.grey.shade100),
+                          columnSpacing: 20,
+                          columns: const [
+                            DataColumn(label: Text('날짜',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('출근',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('퇴근',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(label: Text('근무시간',
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                          ],
+                          rows: _records.map((r) {
+                            final inAt  = r['checkInAt']?.toString();
+                            final outAt = r['checkOutAt']?.toString();
+                            final date  = r['attendanceDate']?.toString();
+                            final hasOut = outAt != null;
+                            return DataRow(cells: [
+                              DataCell(Text(
+                                date != null
+                                    ? DateFormat('yyyy.MM.dd (E)', 'ko')
+                                        .format(DateTime.parse(date))
+                                    : '-',
+                                style: const TextStyle(fontSize: 13),
+                              )),
+                              DataCell(Text(
+                                _fmt(inAt),
+                                style: TextStyle(
+                                    color: Colors.blue.shade700,
+                                    fontWeight: FontWeight.w600),
+                              )),
+                              DataCell(Text(
+                                _fmt(outAt),
+                                style: TextStyle(
+                                    color: hasOut
+                                        ? Colors.red.shade600
+                                        : Colors.orange,
+                                    fontWeight: FontWeight.w600),
+                              )),
+                              DataCell(Text(
+                                _duration(inAt, outAt),
+                                style: TextStyle(color: Colors.grey.shade700),
+                              )),
+                            ]);
+                          }).toList(),
+                        ),
+                      ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('닫기'),
+        ),
+      ],
+    );
   }
 }

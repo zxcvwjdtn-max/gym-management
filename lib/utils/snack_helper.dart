@@ -31,7 +31,7 @@ void showSuccessSnack(BuildContext context, String message) {
       Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
     ]),
     backgroundColor: Colors.green.shade700,
-    duration: const Duration(seconds: 3),
+    duration: const Duration(seconds: 5),
     showCloseIcon: true,
     closeIconColor: Colors.white,
   ));

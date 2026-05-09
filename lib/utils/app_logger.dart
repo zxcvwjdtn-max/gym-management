@@ -1,40 +1,84 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:logger/logger.dart';
 
-/// 개발 모드에서만 로그를 출력합니다.
-/// flutter run          → kDebugMode = true  → 출력됨
-/// flutter run --release → kDebugMode = false → 출력 안됨
-/// flutter build windows → kDebugMode = false → 출력 안됨
+// dart.vm.product = true → release build (flutter build windows --release)
+const _isRelease = bool.fromEnvironment('dart.vm.product');
+
+/// 개발/운영 환경 분리 로거
+/// - 개발(debug): PrettyPrinter → IDE 콘솔, Level.debug
+/// - 운영(release): SimplePrinter → %APPDATA%\GymPRO\logs\gympro-YYYY-MM-DD.log, Level.warning
 class AppLogger {
   AppLogger._();
 
-  /// HTTP 요청 로그 출력
+  static late final Logger _log;
+  static IOSink? _sink;
+
+  /// main() 에서 앱 시작 시 한 번 호출
+  static void init() {
+    if (_isRelease) _openLogFile();
+    _log = Logger(
+      level: _isRelease ? Level.warning : Level.debug,
+      printer: _isRelease
+          ? SimplePrinter(printTime: true, colors: false)
+          : PrettyPrinter(
+              methodCount: 1,
+              errorMethodCount: 6,
+              lineLength: 120,
+              colors: true,
+              printEmojis: true,
+            ),
+      output: _isRelease ? _SinkOutput() : ConsoleOutput(),
+    );
+  }
+
+  // ── 기존 API (api_service.dart 에서 사용) ──────────────────────
+
   static void req(String method, String url, {Object? body}) {
-    if (!kDebugMode) return;
-    debugPrint('┌── [REQ] $method $url');
-    if (body != null) debugPrint('│   body: $body');
-    debugPrint('└────────────────────────────────');
+    _log.d('REQ  $method $url${body != null ? '\n  body: $body' : ''}');
   }
 
-  /// HTTP 응답 로그 출력
   static void res(String method, String url, int statusCode, Object? body) {
-    if (!kDebugMode) return;
-    final icon = statusCode >= 200 && statusCode < 300 ? '✅' : '❌';
-    debugPrint('┌── [RES] $icon $method $url [$statusCode]');
-    debugPrint('│   body: $body');
-    debugPrint('└────────────────────────────────');
+    final ok = statusCode >= 200 && statusCode < 300;
+    if (ok) {
+      _log.d('RES  ✓ $method $url [$statusCode]\n  body: $body');
+    } else {
+      _log.w('RES  ✗ $method $url [$statusCode]\n  body: $body');
+    }
   }
 
-  /// HTTP 에러 로그 출력
-  static void err(String method, String url, Object error) {
-    if (!kDebugMode) return;
-    debugPrint('┌── [ERR] ❌ $method $url');
-    debugPrint('│   error: $error');
-    debugPrint('└────────────────────────────────');
+  static void err(String method, String url, Object error) =>
+      _log.e('ERR  $method $url', error: error);
+
+  static void info(String message)    => _log.i(message);
+  static void warn(String message)    => _log.w(message);
+
+  /// 핸들링되지 않은 예외 기록 (FlutterError.onError 등에서 호출)
+  static void crash(Object error, StackTrace? st) =>
+      _log.f('CRASH', error: error, stackTrace: st);
+
+  // ── 내부: 운영 로그 파일 초기화 ───────────────────────────────
+
+  static void _openLogFile() {
+    try {
+      final appData = Platform.environment['APPDATA'] ?? '.';
+      final dir = Directory('$appData\\GymPRO\\logs');
+      if (!dir.existsSync()) dir.createSync(recursive: true);
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final file  = File('${dir.path}\\gympro-$today.log');
+      _sink = file.openWrite(mode: FileMode.append);
+    } catch (_) {}
   }
 
-  /// 일반 정보 로그 출력
-  static void info(String message) {
-    if (!kDebugMode) return;
-    debugPrint('[INFO] $message');
+  static void dispose() => _sink?.close();
+}
+
+class _SinkOutput extends LogOutput {
+  @override
+  void output(OutputEvent event) {
+    final line = event.lines.join('\n');
+    if (kDebugMode) debugPrint(line);
+    AppLogger._sink?.writeln(line);
+    AppLogger._sink?.flush().ignore();
   }
 }

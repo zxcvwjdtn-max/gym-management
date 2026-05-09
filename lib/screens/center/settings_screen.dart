@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/locale_provider.dart';
@@ -24,6 +27,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _checkoutMode = 'CHECK_IN_ONLY';
   bool _modeSaving = false;
 
+  // 전자계약 PDF 경로
+  String _serverPdfDir = '';
+  final _localPdfCtrl = TextEditingController();
+  bool _pdfSaving = false;
+
+  // 키오스크 공지 설정
+  String _kioskMode = 'NOTICE';
+  final _noticeCtrl = TextEditingController();
+  Uint8List? _kioskImageBytes;
+  bool _kioskSaving = false;
+  bool _imageUploading = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +48,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _rateCtrl.dispose();
+    _localPdfCtrl.dispose();
+    _noticeCtrl.dispose();
     super.dispose();
   }
 
@@ -42,22 +59,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final results = await Future.wait([
         api.getPointSettings(),
         api.getCheckoutMode(),
+        api.getContractPdfSettings(),
+        api.getKioskSettings(),
       ]);
       if (!mounted) return;
       final data = results[0] as Map<String, dynamic>;
+      final pdfSettings = results[2] as Map<String, dynamic>;
+      final kiosk = results[3] as Map<String, dynamic>;
       setState(() {
         _enabled = 'Y' == data['pointEnabled'];
         final r = data['pointRatePercent'];
         _rateCtrl.text = r == null ? '0' : r.toString();
         _checkoutMode = results[1] as String;
+        _serverPdfDir = pdfSettings['serverPdfDir'] as String? ?? '';
+        _localPdfCtrl.text = pdfSettings['localPdfDir'] as String? ?? '';
+        _kioskMode = kiosk['kioskDisplayMode'] as String? ?? 'NOTICE';
+        _noticeCtrl.text = kiosk['kioskNotice'] as String? ?? '';
         _loading = false;
       });
+      // 이미지가 있으면 미리보기 로드
+      if (kiosk['hasImage'] == true) {
+        final imgBytes = await api.getKioskImage();
+        if (mounted && imgBytes != null) {
+          setState(() => _kioskImageBytes = Uint8List.fromList(imgBytes));
+        }
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
         final loc = context.read<LocaleProvider>();
         showErrorSnack(context, '${loc.t('common.loadFailed')}: $e');
       }
+    }
+  }
+
+  Future<void> _saveLocalPdfDir() async {
+    setState(() => _pdfSaving = true);
+    try {
+      await context.read<ApiService>().updateLocalPdfDir(_localPdfCtrl.text.trim());
+      if (mounted) showSuccessSnack(context, '저장되었습니다.');
+    } catch (e) {
+      if (mounted) showErrorSnack(context, '저장 실패: $e');
+    } finally {
+      if (mounted) setState(() => _pdfSaving = false);
     }
   }
 
@@ -73,6 +117,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) showErrorSnack(context, '저장 실패: $e');
     } finally {
       if (mounted) setState(() => _modeSaving = false);
+    }
+  }
+
+  Future<void> _saveKiosk() async {
+    setState(() => _kioskSaving = true);
+    try {
+      await context.read<ApiService>().updateKioskSettings(
+            mode: _kioskMode,
+            notice: _noticeCtrl.text.trim(),
+          );
+      if (mounted) showSuccessSnack(context, '저장되었습니다.');
+    } catch (e) {
+      if (mounted) showErrorSnack(context, '저장 실패: $e');
+    } finally {
+      if (mounted) setState(() => _kioskSaving = false);
+    }
+  }
+
+  Future<void> _pickAndUploadKioskImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    List<int> bytes;
+    if (file.bytes != null) {
+      bytes = file.bytes!;
+    } else if (file.path != null) {
+      bytes = await File(file.path!).readAsBytes();
+    } else {
+      return;
+    }
+
+    setState(() => _imageUploading = true);
+    try {
+      await context.read<ApiService>().uploadKioskImage(
+            bytes, file.name);
+      if (mounted) {
+        setState(() => _kioskImageBytes = Uint8List.fromList(bytes));
+        showSuccessSnack(context, '이미지가 업로드되었습니다.');
+      }
+    } catch (e) {
+      if (mounted) showErrorSnack(context, '업로드 실패: $e');
+    } finally {
+      if (mounted) setState(() => _imageUploading = false);
     }
   }
 
@@ -157,6 +248,188 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.swap_horiz,
                     ),
                   ]),
+          ),
+          const SizedBox(height: 20),
+
+          // ── 전자계약 PDF 저장 경로 ────────────────────────
+          _sectionCard(
+            icon: Icons.picture_as_pdf,
+            title: '전자계약 PDF 저장 경로',
+            desc: '계약서 확인 시 PDF 파일이 저장될 경로를 설정합니다.',
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // 서버 저장 경로 (읽기 전용)
+              Text('서버 저장 경로', style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _serverPdfDir.isEmpty ? '경로 로딩 중...' : _serverPdfDir,
+                  style: const TextStyle(fontSize: 13, fontFamily: 'monospace', color: Color(0xFF333333)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 추가 로컬 저장 경로 (편집 가능)
+              Text('추가 저장 경로 (선택)', style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+              const SizedBox(height: 4),
+              Text('설정 시 PDF가 위 경로 외에 이 경로에도 추가 저장됩니다.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _localPdfCtrl,
+                style: const TextStyle(fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'C:\\Users\\사용자\\Documents\\contracts',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => _localPdfCtrl.clear(),
+                    tooltip: '비우기',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: _pdfSaving ? null : _saveLocalPdfDir,
+                  icon: _pdfSaving
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.save),
+                  label: const Text('저장'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1565C0),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          // ── 키오스크 공지 설정 ───────────────────────────────
+          _sectionCard(
+            icon: Icons.monitor,
+            title: '출석체크 키오스크 공지',
+            desc: '키오스크 화면에 표시할 내용을 설정합니다.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 표시 방식 선택
+                _modeOption(
+                  value: 'NOTICE',
+                  label: '공지사항 텍스트',
+                  desc: '직접 입력한 공지 내용을 표시합니다.',
+                  icon: Icons.campaign_outlined,
+                  currentValue: _kioskMode,
+                  onSelect: () => setState(() => _kioskMode = 'NOTICE'),
+                ),
+                const SizedBox(height: 10),
+                _modeOption(
+                  value: 'IMAGE',
+                  label: '이미지',
+                  desc: '업로드한 이미지를 전체 화면에 표시합니다.',
+                  icon: Icons.image_outlined,
+                  currentValue: _kioskMode,
+                  onSelect: () => setState(() => _kioskMode = 'IMAGE'),
+                ),
+                const SizedBox(height: 20),
+
+                // 공지사항 텍스트 입력 (NOTICE 모드일 때)
+                if (_kioskMode == 'NOTICE') ...[
+                  Text('공지사항 내용',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _noticeCtrl,
+                    maxLines: 5,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '• 공지 내용을 입력하세요.\n• 줄바꿈도 그대로 표시됩니다.',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+
+                // 이미지 업로드 (IMAGE 모드일 때)
+                if (_kioskMode == 'IMAGE') ...[
+                  Text('키오스크 이미지',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700)),
+                  const SizedBox(height: 8),
+                  if (_kioskImageBytes != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        _kioskImageBytes!,
+                        height: 180,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _imageUploading ? null : _pickAndUploadKioskImage,
+                      icon: _imageUploading
+                          ? const SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.upload_file),
+                      label: Text(_kioskImageBytes == null
+                          ? '이미지 선택 및 업로드'
+                          : '이미지 변경'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFF1565C0)),
+                        foregroundColor: const Color(0xFF1565C0),
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: _kioskSaving ? null : _saveKiosk,
+                    icon: _kioskSaving
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.save),
+                    label: const Text('저장'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -279,15 +552,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String label,
     required String desc,
     required IconData icon,
+    String? currentValue,
+    VoidCallback? onSelect,
   }) {
-    final selected = _checkoutMode == value;
+    final selected = (currentValue ?? _checkoutMode) == value;
     return InkWell(
-      onTap: () { if (!selected) _saveCheckoutMode(value); },
+      onTap: () {
+        if (!selected) {
+          if (onSelect != null) {
+            onSelect();
+          } else {
+            _saveCheckoutMode(value);
+          }
+        }
+      },
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1565C0).withOpacity(0.06) : null,
+          color: selected ? const Color(0xFF1565C0).withValues(alpha: 0.06) : null,
           border: Border.all(
             color: selected ? const Color(0xFF1565C0) : Colors.grey.shade300,
             width: selected ? 2 : 1,
@@ -333,7 +616,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF1565C0).withOpacity(0.08) : null,
+          color: selected ? const Color(0xFF1565C0).withValues(alpha: 0.08) : null,
           border: Border.all(
             color: selected ? const Color(0xFF1565C0) : Colors.grey.shade300,
             width: selected ? 2 : 1,

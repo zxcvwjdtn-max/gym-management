@@ -1,0 +1,57 @@
+// 출석 관련 문자열 (attendance.*, checkin.*, attStatus.*, attCheck.*, hourlyAtt.* 키)
+const Map<String, Map<String, String>> kAttendanceStrings = {
+  // ── 출석 공통 상태 ────────────────────────────────
+  'attStatus.active':       {'ko': '유효',     'en': 'Active'},
+  'attStatus.expiringSoon': {'ko': '만료임박', 'en': 'Expiring Soon'},
+  'attStatus.expired':      {'ko': '만료',     'en': 'Expired'},
+
+  // ── 출석 체크 화면 ────────────────────────────────
+  'attCheck.title':         {'ko': '출석 체크',       'en': 'Check-In'},
+  'attCheck.selected':      {'ko': '선택: {d}',       'en': 'Selected: {d}'},
+  'attCheck.checkCount':    {'ko': '출석 {n}명',       'en': 'Present: {n}'},
+  'attCheck.searchResults': {'ko': '검색 결과: {n}명', 'en': 'Results: {n}'},
+  'attCheck.done':          {'ko': '출석 완료: {n}명', 'en': 'Checked in: {n}'},
+  'attCheck.dialog.title':  {'ko': '{name} 출석 시간 지정',
+                             'en': 'Set check-in time for {name}'},
+  'attCheck.dialog.date':   {'ko': '날짜: {d}',       'en': 'Date: {d}'},
+  'attCheck.dialog.inTime': {'ko': '입실 시간',       'en': 'Check-In Time'},
+  'attCheck.dialog.outTime':{'ko': '퇴실 시간',       'en': 'Check-Out Time'},
+  'attCheck.dialog.submit': {'ko': '출석 등록',       'en': 'Register'},
+  'attCheck.snack.done':    {'ko': '{name} 출석 처리됨', 'en': '{name} checked in'},
+  'attCheck.snack.fail':    {'ko': '출석 실패',       'en': 'Check-in failed'},
+  'attCheck.snack.removed': {'ko': '{name} 출석 해제됨', 'en': '{name} removed'},
+  'attCheck.snack.rmFail':  {'ko': '해제 실패',       'en': 'Failed to remove'},
+  'attCheck.btn.check':     {'ko': '출석',            'en': 'Check'},
+  'attCheck.btn.release':   {'ko': '해제',            'en': 'Remove'},
+  'attCheck.badge.present': {'ko': '출석',            'en': 'Present'},
+
+  // ── 출석 현황 화면 ────────────────────────────────
+  'attStatus.title':        {'ko': '출석현황',    'en': 'Attendance Status'},
+  'attStatus.tab.date':     {'ko': '날짜별',      'en': 'By Date'},
+  'attStatus.tab.member':   {'ko': '회원별',      'en': 'By Member'},
+  'attStatus.totalCount':   {'ko': '총 {n}명',    'en': 'Total {n}'},
+  'attStatus.empty':        {'ko': '출석 기록이 없습니다.',
+                             'en': 'No attendance records.'},
+  'attStatus.col.index':    {'ko': '순번',       'en': '#'},
+  'attStatus.col.memberNo': {'ko': '회원번호',   'en': 'Member No'},
+  'attStatus.col.name':     {'ko': '이름',       'en': 'Name'},
+  'attStatus.col.ticket':   {'ko': '이용권',     'en': 'Ticket'},
+  'attStatus.col.state':    {'ko': '상태',       'en': 'Status'},
+  'attStatus.col.remainD':  {'ko': '잔여일',     'en': 'Remaining'},
+  'attStatus.col.time':     {'ko': '출석시간',   'en': 'Time'},
+  'attStatus.remainDays':   {'ko': '{n}일',      'en': '{n} d'},
+  'attStatus.monthlyCount': {'ko': '이달 출석: {n}회',
+                             'en': 'This month: {n}'},
+  'attStatus.inOut':        {'ko': '입 {inT} · 퇴 {outT}',
+                             'en': 'In {inT} · Out {outT}'},
+  'attStatus.inOnly':       {'ko': '입 {inT}',   'en': 'In {inT}'},
+  'attStatus.selectMember': {'ko': '좌측에서 회원을 선택해 주세요.',
+                             'en': 'Select a member from the left.'},
+
+  // ── 시간대별 출석 ────────────────────────────────
+  'hourlyAtt.title':        {'ko': '시간대별 출석', 'en': 'Hourly Attendance'},
+  'hourlyAtt.subtitle':     {'ko': '시간대별 방문 현황',
+                             'en': 'Visits per Hour'},
+  'hourlyAtt.empty':        {'ko': '데이터가 없습니다.', 'en': 'No data.'},
+  'hourlyAtt.personCount':  {'ko': '{n}명',       'en': '{n}'},
+};

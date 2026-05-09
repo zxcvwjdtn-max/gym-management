@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -10,9 +11,24 @@ import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'services/api_service.dart';
 import 'utils/webview2_checker.dart';
+import 'utils/app_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  AppLogger.init();
+
+  // 핸들링되지 않은 Flutter 프레임워크 오류 → 로그 기록
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    AppLogger.crash(details.exception, details.stack);
+  };
+
+  // 핸들링되지 않은 비동기 오류 → 로그 기록
+  PlatformDispatcher.instance.onError = (error, stack) {
+    AppLogger.crash(error, stack);
+    return false;
+  };
 
   // 웹에서는 WebView2 체크 생략
   final webView2Available = kIsWeb ? false : await checkWebView2Available();

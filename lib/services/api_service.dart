@@ -2,14 +2,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
+import '../config.dart';
 import '../utils/app_logger.dart';
 
 class ApiService {
-  // 웹 Docker 배포 시 --dart-define=API_BASE_URL=http://서버IP/api 로 주입
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:8080/api',
-  );
+  static const String baseUrl = AppConfig.serverUrl;
 
   /// 401 응답 수신 시 호출되는 콜백 — AuthProvider에서 주입
   void Function()? onUnauthorized;
@@ -614,6 +611,20 @@ class ApiService {
     await _delete('/admins/$adminId');
   }
 
+  /// 직원 출근 이력 조회
+  Future<List<Map<String, dynamic>>> getStaffAttendance(
+    int adminId, {
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final f = (from ?? DateTime.now().subtract(const Duration(days: 90)))
+        .toIso8601String()
+        .substring(0, 10);
+    final t = (to ?? DateTime.now()).toIso8601String().substring(0, 10);
+    final data = await _get('/admins/$adminId/attendance?from=$f&to=$t') as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
   // ── PT 관리 ─────────────────────────────────────────────────
 
   /// 트레이너 목록 조회 (is_trainer = Y)
@@ -855,6 +866,47 @@ class ApiService {
     await _put('/gyms/checkout-mode', {'checkoutMode': mode});
   }
 
+  // ── 키오스크 공지 설정 ────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getKioskSettings() async {
+    final data = await _get('/gyms/kiosk-settings');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<void> updateKioskSettings({
+    required String mode,
+    required String notice,
+  }) async {
+    await _put('/gyms/kiosk-settings', {
+      'kioskDisplayMode': mode,
+      'kioskNotice': notice,
+    });
+  }
+
+  Future<List<int>?> getKioskImage() async {
+    final headers = await _headers();
+    final uri = Uri.parse('$baseUrl/gyms/kiosk-image');
+    AppLogger.req('GET', uri.toString());
+    final response = await http.get(uri, headers: headers);
+    if (response.statusCode == 200) return response.bodyBytes;
+    return null;
+  }
+
+  Future<void> uploadKioskImage(List<int> bytes, String filename) async {
+    final token = await getToken();
+    final uri = Uri.parse('$baseUrl/gyms/kiosk-image');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer ${token ?? ''}'
+      ..files.add(http.MultipartFile.fromBytes('file', bytes,
+          filename: filename));
+    final streamed = await request.send();
+    final body = jsonDecode(await streamed.stream.bytesToString());
+    AppLogger.res('POST', uri.toString(), streamed.statusCode, body);
+    if (streamed.statusCode != 200) {
+      throw Exception(body['message'] ?? '이미지 업로드 실패');
+    }
+  }
+
   // ── 전자계약 ─────────────────────────────────────────────────────
 
   /// 계약서 템플릿 목록
@@ -910,6 +962,17 @@ class ApiService {
   /// 계약 신청 삭제
   Future<void> deleteContract(int applicationId) async {
     await _delete('/contract/applications/$applicationId');
+  }
+
+  /// PDF 저장 경로 설정 조회
+  Future<Map<String, dynamic>> getContractPdfSettings() async {
+    final data = await _get('/contract/pdf-settings');
+    return Map<String, dynamic>.from(data ?? {});
+  }
+
+  /// PDF 로컬 저장 경로 변경
+  Future<void> updateLocalPdfDir(String localPdfDir) async {
+    await _put('/contract/pdf-settings', {'localPdfDir': localPdfDir});
   }
 
   // ── 커뮤니티 — 공지사항 / 전달사항 ────────────────────────────
