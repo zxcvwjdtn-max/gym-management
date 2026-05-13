@@ -20,7 +20,7 @@ class AppConfig {
 
   // ── 환경별 URL ───────────────────────────────────────────────
   static const String _devUrl  = 'http://1.234.20.159:8081/api';
-  static const String _prodUrl = 'http://1.234.20.159:8081/api';
+  static const String _prodUrl = 'http://1.234.20.159:8083/api';
 
   static const bool _isProd = bool.fromEnvironment('dart.vm.product');
 

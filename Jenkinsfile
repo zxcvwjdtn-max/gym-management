@@ -98,17 +98,6 @@ pipeline {
         //  운영 배포 (main 브랜치)
         // ══════════════════════════════════════════════════════
 
-        stage('PROD: 승인') {
-            when { branch 'main' }
-            agent none
-            steps {
-                timeout(time: 30, unit: 'MINUTES') {
-                    input message: "⚠️ [gym-management] 운영 배포를 진행하시겠습니까? (#${BUILD_NUMBER})",
-                          ok: '배포 승인'
-                }
-            }
-        }
-
         stage('PROD: Android + Web 빌드 & 배포') {
             when { branch 'main' }
             agent any
